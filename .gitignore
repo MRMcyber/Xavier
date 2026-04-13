@@ -48,6 +48,9 @@ docker-compose.override.yml
 
 # Logs
 *.log
+
+# Client is a separate repository
+client/
 logs/
 
 # Testing
