@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: xavier-api
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - SEARXNG_URL=http://searxng:8080
+      - FRESHRSS_URL=http://freshrss:80
+    env_file:
+      - ./server/.env
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./server:/app
+
+  redis:
+    image: redis:7-alpine
+    container_name: xavier-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  celery-worker:
+    build: 
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: xavier-celery-worker
+    command: celery -A app.workers.celery_app worker --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - SEARXNG_URL=http://searxng:8080
+      - FRESHRSS_URL=http://freshrss:80
+    env_file:
+      - ./server/.env
+    depends_on:
+      - api
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./server:/app
+
+  celery-beat:
+    build: 
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: xavier-celery-beat
+    command: celery -A app.workers.celery_app beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    env_file:
+      - ./server/.env
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./server:/app
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: xavier-searxng
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - INSTANCE_NAME=xavier-search
+      - SEARXNG_BASE_URL=http://localhost:8080/
+    restart: unless-stopped
+
+  freshrss:
+    image: freshrss/freshrss:latest
+    container_name: xavier-freshrss
+    ports:
+      - "8081:80"
+    environment:
+      - TZ=UTC
+      - CRON_MIN=1,31
+    volumes:
+      - freshrss_data:/var/www/FreshRSS/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  freshrss_data:
